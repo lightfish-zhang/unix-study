@@ -1,8 +1,8 @@
 APUE_DIR = "../../../apue.3e"
 
-all:ls
+all:ls.out
 
-ls:ls.c
+ls.out:ls.c
 	gcc -o ls.out ls.c -I $(APUE_DIR)/include/ -L $(APUE_DIR)/lib/ -lapue
 clean:
-	rm -fr ./ls
+	rm -fr ./ls.out
