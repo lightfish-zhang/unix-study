@@ -7,7 +7,7 @@
 #include <limits.h>
 
 #ifdef PATH_MAX
-static long pathmax = PATH_MAX
+static long pathmax = PATH_MAX;
 #else
 static long pathmax = 0;
 #endif
