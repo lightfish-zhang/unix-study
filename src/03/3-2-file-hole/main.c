@@ -10,15 +10,19 @@ int main(void)
 
     if((fd = creat("file.hole.tmp", FILE_MODE)) < 0)
         err_sys("creat error");
+    // offset now = 0
 
     if(write(fd, buf1, 10) != 10)
         err_sys("buf1 write error");
+    // offset now = 10
 
     if(lseek(fd, 16384, SEEK_SET) == -1)
         err_sys("lseek error");
+    // offset now = 16384
 
     if(write(fd, buf2, 10) != 10)
         err_sys("buf2 write error");
+    // offset now = 16394
 
 
     int fd2;
@@ -33,6 +37,7 @@ int main(void)
         if(write(fd2, "\0", 1) != 1)
             err_sys("buf1 write error");
     }
+    // offset now = 16384
 
     if(write(fd2, buf2, 10) != 10)
         err_sys("buf2 write error");
