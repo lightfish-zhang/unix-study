@@ -31,7 +31,7 @@ main()
     int fd4 = theDup2(fd, 200);
     printf("fd4 is %d\n", fd4);
     if(fd4 < 0){
-        perror("error: theDup2\n");
+        fprintf(stderr,"error: theDup2\n");
         exit(1);
     }
     read(fd4, readBuffer, sizeof(readBuffer));

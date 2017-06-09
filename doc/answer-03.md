@@ -55,3 +55,51 @@ theDup2(int fd, int fd2)
 }
 
 ```
+
+### 假设一个进程执行下面3个函数调用：
+```c
+fd1 = open(path, oflags);
+fd2 = dup(fd1);
+fd3 = open(path, oflags);
+```
+画出类似于图3-9的结果图。对fcntl作用于fd1来说，F_SETFD命令会影响哪一个文件描述符？ F_SETFL呢？    
+
+不画图了，简单来说，
+- fd1和fd2共享同一个文件表项
+- fd1,fd2,fd3在同一个进程表中
+
+对fcntl的cmd参数
+- `F_SETFD`命令设置`close-on-exec`标志，该标志以参数arg的`FD_CLOEXEC`位决定，应当了解很多现存的涉及文件描述符标志的程序并不使用常数 FD_CLOEXEC，而是将此标志设置为0(系统默认，在exec时不关闭)或1(在exec时关闭)
+
+> fork子进程，子进程很可能会继续exec新的程序。子进程以写时复制（COW，Copy-On-Write）方式获得父进程的数据空间、堆和栈副本，这其中也包括文件描述符。刚刚fork成功时，父子进程中相同的文件描述符指向系统文件表中的同一项（这也意味着他们共享同一文件偏移量）。
+> 有时我们fork子进程时已经不知道打开了多少个文件描述符（包括socket句柄等），这此时进行逐一清理确实有很大难度。我们期望的是能在fork子进程前打开某个文件句柄时就指定好：“这个句柄我在fork子进程后执行exec时就关闭”。即所谓的 close-on-exec。
+
+[理解close-on-exec](http://blog.csdn.net/chrisniu1984/article/details/7050663)
+
+```
+#example
+fcntl(fd, F_SETFD, FD_CLOEXEC);
+# or
+fcntl(fd, F_SETFD, 0);
+```
+
+- `F_SETFL`命令设置文件描述符标志，新标志值按第三个参数，如`fcntl(fd, F_SETFD, O_RDONLY)`，文件状态标志见书的图3-10
+
+```
+# example
+int s = socket(PF_INET, SOCK_STREAM, 0);
+
+fcntl(s, F_SETFL, O_NONBLOCK);  // 設定為非阻塞（non-blocking）
+fcntl(s, F_SETFL, O_ASYNC);     // 設定為非同步 I/O
+```
+
+### 在Bourne shell, Bourne-again shell和Korn shell中，digit1>&digit2表示要将描述符digit1重定向至描述符digit2的同一文件。请说明下面命令的区别。
+
+```
+./a.out > outfile 2>&1
+./a.out 2>&1 > outfile
+```
+
+一眼看上去两者好像没区别，实测后
+- 第一条命令，stdout和stderr都会输出到outfile，打开outfile发现stderr都在stdout之前
+- 第二条命令，stderr会输出到tty，stdout会输出到outfile

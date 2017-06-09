@@ -6,7 +6,7 @@ int
 theDup2(int fd, int fd2)
 {
     if(fd < 0 || fd2 <0){
-        fprintf(stderr, "error: fd < 0 || fd2 < 0");
+        fprintf(stderr, "error: fd < 0 || fd2 < 0\n");
         return -1;
     }
 
