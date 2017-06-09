@@ -18,7 +18,7 @@ char * strerror(int errnum)
 void perror(const char *msg)
 ```
 
-- stderror是根据errnum(int类型)返回相应的出错信息，因此不会将指向错误信息的字符串指针的指向修改，因此stderror的参数不需要const
+- strerror是根据errnum(int类型)返回相应的出错信息，因此不会将指向错误信息的字符串指针的指向修改，因此strerror的参数不需要const
 - perror接受的参数是字符串指针，就可能存在修改指向错误信息的字符串指针的指向，因此需要const声明限定此行为
 
 ### 若日历时间存放在代符号的32位整型数中，那么到哪一年它将溢出? 可以用什么方法扩展溢出浮点数？采用什么策略与现有应用兼容？
