@@ -103,3 +103,6 @@ fcntl(s, F_SETFL, O_ASYNC);     // 設定為非同步 I/O
 一眼看上去两者好像没区别，实测后
 - 第一条命令，stdout和stderr都会输出到outfile，打开outfile发现stderr都在stdout之前
 - 第二条命令，stderr会输出到tty，stdout会输出到outfile
+
+### 如果使用追加标志打开一个文件以便读写，能否仍用`lseek`在任一位置开始读？能否用`lseek`更新文件中任一部分的数据？请编写一段程序验证。
+
