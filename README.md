@@ -2,13 +2,22 @@
 
 ## prepare
 
-- for ubuntu
+### unix dependence
+
+- dependence for Linux Debian
 
 ```
 sudo apt-get install libbsd-dev
 ```
 
-- library
+- dependence for Linux Arch
+
+```
+sudo pacman -S libbsd
+```
+
+
+### library from book
 
 ```shell
 cd aput.3e && make
