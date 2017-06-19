@@ -55,5 +55,8 @@ cmake-build-debug
 .idea
 *.out
 *.tmp
+*.i
+*.o
+*.s
 
 apue.3e

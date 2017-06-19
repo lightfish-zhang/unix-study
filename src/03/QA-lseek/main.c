@@ -31,7 +31,7 @@ int readLimit(int fd, int start, int size){
     putc('\n', stdout);
 }
 
-int writeLimit(int fd, int start, char * buffer, size){
+int writeLimit(int fd, int start, char * buffer, size_t size){
     if(lseek(fd, start, SEEK_SET) < 0){
         perror("error, lseek()");
         return -1;
