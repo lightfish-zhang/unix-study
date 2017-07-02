@@ -60,3 +60,6 @@ cmake-build-debug
 *.s
 
 apue.3e
+
+# Integrated Development Environment
+.vscode
