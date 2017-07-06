@@ -72,3 +72,48 @@ cat: file.tmp: Permission denied
 - 综上所述，修改了父目录的内容，影响父目录的文件大小，所以更新了父目录的`st_mtim`与`st_ctim`。将文件的inode的链接数-1，所以更新了本文件的`st_ctim`。
 
 ### 10. 4.22节中，系统对可打开文件数的限制对myftw函数会产生什么影响。
+
+- 4-22节的`myftw`代码见附录
+- 分析代码，`myftw()`中使用自定义的`dopath()`函数来遍历所有文件，且`dopath()`是递归方法，执行步骤如下
+    + 静态（文件全局）变量数组`fullpath`用作临时保存当前处理的文件的路径，每一个元素是目录文件名或者其他文件名
+    + 判断是否目录文件，如果是，`opendir()`获取目录文件句柄，`readdir()`获取目录文件下除了`.`与`..`之外的文件名，追加到`fullpath`
+    + 访问`fullpath`文件，如果是目录文件，返回前一个步骤
+    + 访问`fullpath`文件，如果非目录文件，`lstat`获取文件信息，修改`fullpath`最后一个元素，设置为0或者下一个文件名
+    + 当某一个目录文件下所有文件都遍历过，该目录文件的文件描述符`fd`才会被`close()`回收。如果目录文件的层级过深，该进程就会同时打开过多的目录文件的文件描述符`fd`。
+- 综上所述，系统如果有对可打开文件数的限制，`myftw`可以同时打开的目录文件的文件描述符数量就会收到限制，访问过深的目录可能导致发生错误。
+
+### 11. 在4.22节中的myftw从不改变其目录，对这种处理方法进行改动，每次遇到一个目录就用其调用chdir，这样每次调用lstat时就可以使用文件名而非路径名，处理完所有的目录项后执行chdir("..")。比较这种版本的程序和书中程序的运行时间。
+
+- 将`myftw`改写后的代码见附录，两份代码都计算实行时间
+- 运行结果如下
+
+```
+# 原来的ftw
+time ../4-22-ftw/main.out ~
+regular files  =   49792, 86.06 %
+directories    =    7751, 13.40 %
+block special  =       0,  0.00 %
+char special   =       0,  0.00 %
+FIFOs          =       1,  0.00 %
+symbolic links =     308,  0.53 %
+sockets        =       2,  0.00 %
+time: 103773 us
+../4-22-ftw/main.out ~  0.02s user 0.08s system 92% cpu 0.105 total
+
+# 改用chdir后的ftw
+time ../4-22-ftw-chdir/main.out ~
+regular files =   49793, 86.07 %
+directories =    7751, 13.40 %
+block special =       0,  0.00 %
+char special =       0,  0.00 %
+FIFOs =       1,  0.00 %
+symbolic links =     308,  0.53 %
+sockets =       2,  0.00 %
+time: 77628 us
+./main.out ~  0.01s user 0.07s system 97% cpu 0.079 total
+```
+
+- 运行环境：笔者机器是四核cpu，8G内存
+- 如结果所示，修改后的改用`chdir`的`ftw`方法运行速度更快，笔者机器上运行看效率差别不大，但是从社区查看别人的测试结果，说相差了一倍。
+- 分析两者代码差异
+    + 
