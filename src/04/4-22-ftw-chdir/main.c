@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
 #define FTW_DNR 3
 #define FTW_NS 4
 
-static char filePath[10000];
+static char filePath[10000]; // set it long not more
 static size_t pathlen;
 static int myftw(char *pathname, Myfunc *func)
 {
