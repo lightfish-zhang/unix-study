@@ -116,4 +116,365 @@ time: 77628 us
 - 运行环境：笔者机器是四核cpu，8G内存
 - 如结果所示，修改后的改用`chdir`的`ftw`方法运行速度更快，笔者机器上运行看效率差别不大，但是从社区查看别人的测试结果，说相差了一倍。
 - 分析两者代码差异
-    + 不知道- -
+    + 两者的区别在于，原版的需要维护一个静态变量`fullPath`数组，作为当前访问的文件的绝对路径，由于绝对路径的变化，换一个文件就需要修改一次`fullPath`，该过程使用了`realloc()`重新分配`fullPath`的内存大小，每换一次文件就需要调用一次`realloc()`
+    + 修改版，一开始需要给`filePath`分配足够大的内存大小存放文件名，切换目录是使用`chdir`修改当前工作目录，修改文件名`filePath`，再访问文件，每换一次目录文件，调用一次`chdir`
+    + 综上所述，原版的系统调用执行比修改版的多
+
+
+### 12. 每个进程都有一个根目录用于解析绝对路径名，可以通过chroot函数改变根目录。在手册查阅此函数。说明这个函数什么时候有用。
+
+- chroot命令用来在指定的根目录下运行指令。chroot，即 change root directory （更改 root 目录）。在 linux 系统中，系统默认的目录结构都是以/，即是以根 (root) 开始的。而在使用 chroot 之后，系统的目录结构将以指定的位置作为/位置。
+
+- 增加了系统的安全性，限制了用户的权力
+    + 在经过 chroot 之后，在新根下将访问不到旧系统的根目录结构和文件，这样就增强了系统的安全性。这个一般是在登录 (login) 前使用 chroot，以此达到用户不能访问一些特定的文件。
+
+- 建立一个与原系统隔离的系统目录结构，方便用户的开发
+    + 使用 chroot 后，系统读取的是新根下的目录和文件，这是一个与原系统根下文件不相关的目录结构。在这个新的环境中，可以用来测试软件的静态编译以及一些与系统不相关的独立开发。
+
+- 切换系统的根目录位置，引导 Linux 系统启动以及急救系统等
+    + chroot 的作用就是切换系统的根位置，而这个作用最为明显的是在系统初始引导磁盘的处理过程中使用，从初始 RAM 磁盘 (initrd) 切换系统的根位置并执行真正的 init。另外，当系统出现一些问题时，我们也可以使用 chroot 来切换到一个临时的系统。
+
+
+### 13. 如何只设置两个时间值中的一个来使用utimes函数?
+
+utimes与stat都是跟随符号链接，先使用stat获取文件的不需要修改的时间值，再使用utimes修改时间
+
+
+### 14. 有些版本的finger(1)命令输出`New mail received...`和`unread since...`，其中...表示相应的日期和时间。程序是如何决定这些日期和时间的？
+
+。。。以后再答
+
+### 15. 用cpio(1)和tar(1)命令检查档案文件的格式。3个可能的时间值中哪几个是为每一个文件保存的？你认为文件复原时，文件的访问时间是什么？为什么？
+
+。。。以后再答
+
+### 16. UNIX系统对目录树的深度有限制吗？编写一个程序循环，在每次循环中，创建目录，并将该目录更改为工作目录。确保叶节点的绝对路径名的长度大于系统的PATH_MAX限制。可以调用`getcwd`得到目录的路径名吗？标准UNIX系统工具是如何处理长路径的？对目录可以使用tar或cpio命令归档吗?
+
+。。。以后再答
+
+### 17. 3.16节描述了/dev/fd特征。如果每个用户都可以访问这些文件，则其访问权限必须为rw-rw-rw-。有些程序创建输出文件时，先删除该文件以确保该文件名不存在，忽略返回码。如果path是/dev/fd/1，会出现什么情况?
+
+```c
+unlink(path);
+if((fd = creat(path, FILE_MODE))<0)
+    err_sys(...);
+```
+
+。。。以后再答
+
+
+
+
+## 附录
+
+### ftw程序
+
+#### 书上的原版ftw程序，稍作改动，打印出执行的时间
+
+```c
+#include "apue.h"
+#include <dirent.h>
+#include <limits.h>
+#include <sys/time.h>
+
+/* function type that is called for each filename */
+typedef	int	Myfunc(const char *, const struct stat *, int);
+
+static Myfunc	myfunc;
+static int		myftw(char *, Myfunc *);
+static int		dopath(Myfunc *);
+
+static long	nreg, ndir, nblk, nchr, nfifo, nslink, nsock, ntot;
+
+int
+main(int argc, char *argv[])
+{
+    struct timeval start, end;
+    int timeuse;
+	int		ret;
+
+	if (argc != 2)
+		err_quit("usage:  ftw  <starting-pathname>");
+
+    gettimeofday( &start, NULL );
+	ret = myftw(argv[1], myfunc);		/* does it all */
+    gettimeofday( &end, NULL );
+
+	ntot = nreg + ndir + nblk + nchr + nfifo + nslink + nsock;
+	if (ntot == 0)
+		ntot = 1;		/* avoid divide by 0; print 0 for all counts */
+	printf("regular files  = %7ld, %5.2f %%\n", nreg,
+	  nreg*100.0/ntot);
+	printf("directories    = %7ld, %5.2f %%\n", ndir,
+	  ndir*100.0/ntot);
+	printf("block special  = %7ld, %5.2f %%\n", nblk,
+	  nblk*100.0/ntot);
+	printf("char special   = %7ld, %5.2f %%\n", nchr,
+	  nchr*100.0/ntot);
+	printf("FIFOs          = %7ld, %5.2f %%\n", nfifo,
+	  nfifo*100.0/ntot);
+	printf("symbolic links = %7ld, %5.2f %%\n", nslink,
+	  nslink*100.0/ntot);
+	printf("sockets        = %7ld, %5.2f %%\n", nsock,
+	  nsock*100.0/ntot);
+
+
+    timeuse = 1000000 * ( end.tv_sec - start.tv_sec ) + end.tv_usec -start.tv_usec;
+    printf("time: %d us\n", timeuse);
+
+	exit(ret);
+}
+
+/*
+ * Descend through the hierarchy, starting at "pathname".
+ * The caller's func() is called for every file.
+ */
+#define	FTW_F	1		/* file other than directory */
+#define	FTW_D	2		/* directory */
+#define	FTW_DNR	3		/* directory that can't be read */
+#define	FTW_NS	4		/* file that we can't stat */
+
+static char	*fullpath;		/* contains full pathname for every file */
+static size_t pathlen;
+
+static int					/* we return whatever func() returns */
+myftw(char *pathname, Myfunc *func)
+{
+	fullpath = path_alloc(&pathlen);	/* malloc PATH_MAX+1 bytes */
+										/* ({Prog pathalloc}) */
+	if (pathlen <= strlen(pathname)) {
+		pathlen = strlen(pathname) * 2;
+		if ((fullpath = realloc(fullpath, pathlen)) == NULL)
+			err_sys("realloc failed");
+	}
+	strcpy(fullpath, pathname);
+	return(dopath(func));
+}
+
+/*
+ * Descend through the hierarchy, starting at "fullpath".
+ * If "fullpath" is anything other than a directory, we lstat() it,
+ * call func(), and return.  For a directory, we call ourself
+ * recursively for each name in the directory.
+ */
+static int					/* we return whatever func() returns */
+dopath(Myfunc* func)
+{
+	struct stat		statbuf;
+	struct dirent	*dirp;
+	DIR				*dp;
+	int				ret, n;
+
+	if (lstat(fullpath, &statbuf) < 0)	/* stat error */
+		return(func(fullpath, &statbuf, FTW_NS));
+	if (S_ISDIR(statbuf.st_mode) == 0)	/* not a directory */
+		return(func(fullpath, &statbuf, FTW_F));
+
+	/*
+	 * It's a directory.  First call func() for the directory,
+	 * then process each filename in the directory.
+	 */
+	if ((ret = func(fullpath, &statbuf, FTW_D)) != 0)
+		return(ret);
+
+	n = strlen(fullpath);
+	if (n + NAME_MAX + 2 > pathlen) {	/* expand path buffer */
+		pathlen *= 2;
+		if ((fullpath = realloc(fullpath, pathlen)) == NULL)
+			err_sys("realloc failed");
+	}
+	fullpath[n++] = '/';
+	fullpath[n] = 0;
+
+	if ((dp = opendir(fullpath)) == NULL)	/* can't read directory */
+		return(func(fullpath, &statbuf, FTW_DNR));
+
+	while ((dirp = readdir(dp)) != NULL) {
+		if (strcmp(dirp->d_name, ".") == 0  ||
+		    strcmp(dirp->d_name, "..") == 0)
+				continue;		/* ignore dot and dot-dot */
+		strcpy(&fullpath[n], dirp->d_name);	/* append name after "/" */
+		if ((ret = dopath(func)) != 0)		/* recursive */
+			break;	/* time to leave */
+	}
+	fullpath[n-1] = 0;	/* erase everything from slash onward */
+
+	if (closedir(dp) < 0)
+		err_ret("can't close directory %s", fullpath);
+	return(ret);
+}
+
+static int
+myfunc(const char *pathname, const struct stat *statptr, int type)
+{
+	switch (type) {
+	case FTW_F:
+		switch (statptr->st_mode & S_IFMT) {
+		case S_IFREG:	nreg++;		break;
+		case S_IFBLK:	nblk++;		break;
+		case S_IFCHR:	nchr++;		break;
+		case S_IFIFO:	nfifo++;	break;
+		case S_IFLNK:	nslink++;	break;
+		case S_IFSOCK:	nsock++;	break;
+		case S_IFDIR:	/* directories should have type = FTW_D */
+			err_dump("for S_IFDIR for %s", pathname);
+		}
+		break;
+	case FTW_D:
+		ndir++;
+		break;
+	case FTW_DNR:
+		err_ret("can't read directory %s", pathname);
+		break;
+	case FTW_NS:
+		err_ret("stat error for %s", pathname);
+		break;
+	default:
+		err_dump("unknown type %d for pathname %s", type, pathname);
+	}
+	return(0);
+}
+
+```
+
+#### 使用`chdir`的ftw程序修改版
+
+```c
+#include "apue.h"
+#include <dirent.h>
+#include <limits.h>
+#include <sys/time.h>
+
+typedef int Myfunc(const char *, const struct stat *, int);
+
+static Myfunc myfunc;
+static int myftw(char *k, Myfunc *);
+static int dopath(Myfunc *);
+
+static long nreg, ndir, nblk, nchr, nfifo, nslink, nsock, ntot;
+
+
+int main(int argc, char *argv[])
+{
+    struct timeval start, end;
+    int ret;
+    int timeuse;
+    if (argc != 2)
+        err_quit("usage: ftw <starting-pathname>");
+    gettimeofday( &start, NULL );
+    ret = myftw(argv[1], myfunc);
+    gettimeofday( &end, NULL );
+
+    ntot = nreg + ndir + nblk + nchr + nfifo + nslink + nsock;
+
+    if (ntot == 0)
+        ntot = 1;
+
+    printf("regular files = %7ld, %5.2f %%\n", nreg, nreg*100.0/ntot);
+
+    printf("directories = %7ld, %5.2f %%\n", ndir, ndir*100.0/ntot);
+
+    printf("block special = %7ld, %5.2f %%\n", nblk, nblk*100.0/ntot);
+
+    printf("char special = %7ld, %5.2f %%\n", nchr, nchr*100.0/ntot);
+
+    printf("FIFOs = %7ld, %5.2f %%\n", nfifo, nfifo*100.0/ntot);
+
+    printf("symbolic links = %7ld, %5.2f %%\n", nslink, nslink*100.0/ntot);
+
+    printf("sockets = %7ld, %5.2f %%\n", nsock, nsock*100.0/ntot);
+
+    timeuse = 1000000 * ( end.tv_sec - start.tv_sec ) + end.tv_usec -start.tv_usec;
+    printf("time: %d us\n", timeuse);
+    exit(ret);
+}
+
+#define FTW_F 1
+#define FTW_D 2
+#define FTW_DNR 3
+#define FTW_NS 4
+
+static char filePath[10000]; // set it long not more
+static size_t pathlen;
+static int myftw(char *pathname, Myfunc *func)
+{
+    strcpy(filePath, pathname);
+    return(dopath(func));
+}
+
+static int dopath(Myfunc *func)
+{
+    struct stat statbuf;
+    struct dirent *dirp;
+    DIR *dp;
+    int ret, n;
+    char *tmp;
+
+    if (lstat(filePath, &statbuf) < 0)
+        return(func(filePath, &statbuf, FTW_NS));
+
+    if (S_ISDIR(statbuf.st_mode) == 0)
+        return(func(filePath, &statbuf, FTW_F));
+
+    if ((ret = func(filePath, &statbuf, FTW_D)) != 0)
+        return(ret);
+
+
+    if (chdir(filePath) < 0) 
+        err_quit("chdir error");
+
+    if ((dp = opendir(".")) == NULL)
+        return(func(filePath, &statbuf, FTW_DNR));
+
+    while ((dirp = readdir(dp)) != NULL) {
+        if (strcmp(dirp->d_name, ".") == 0 ||
+            strcmp(dirp->d_name, "..") == 0)
+            continue;
+        
+
+        strcpy(filePath, dirp->d_name);
+        //printf("%s\n",filePath);
+        if ((ret = dopath(func)) != 0)
+            break;
+    }
+
+    if (closedir(dp) < 0)
+        err_ret("can't close directory %s", filePath);
+
+    if (chdir("..") < 0) 
+        err_quit("chdir to .. error");
+    return(ret);
+}
+
+
+               
+static int myfunc(const char *pathname, const struct stat *statptr, int type)
+{
+    switch (type) {
+    case FTW_F:
+        switch (statptr->st_mode & S_IFMT) {
+        case S_IFREG: nreg++; break;
+        case S_IFBLK: nblk++; break;
+        case S_IFCHR: nchr++; break;
+        case S_IFIFO: nfifo++; break;
+        case S_IFLNK: nslink++; break;
+        case S_IFSOCK: nsock++; break;
+        case S_IFDIR:
+            err_dump("for S_IFDIR for %s", pathname);
+        }
+        break;
+    case FTW_D:
+        ndir++;
+        break;
+    case FTW_DNR:
+        err_ret("can't read directory %s", pathname);
+    case FTW_NS:
+        err_ret("stat error for %s", pathname);
+        break;
+    default:
+        err_dump("unknown type %d for pathname %s", type, pathname);
+    }
+    return(0);
+}
+
+```
